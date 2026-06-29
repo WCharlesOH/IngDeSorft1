@@ -20,7 +20,6 @@ function mapMaquina(r) {
   };
 }
 
-// La consulta trae la máquina anidada, espera maquinariaId/maquinariaNombre planos.
 function mapIncidencia(r) {
   return {
     id: r.id,
@@ -35,6 +34,17 @@ function mapIncidencia(r) {
     reportadoPor: r.reportado_por ?? '',
     comentarioTecnico: r.comentario_tecnico ?? '',
     evidenciaUrl: r.evidencia_url ?? null,
+  };
+}
+
+function mapAlerta(r) {
+  return {
+    id: r.id,
+    tipo: r.tipo,
+    mensaje: r.mensaje,
+    maquinaria: r.maquinaria,
+    fechaEnvio: (r.fecha_envio ?? '').split('T')[0],
+    estado: r.estado,
   };
 }
 
@@ -81,13 +91,6 @@ const INITIAL_REGISTROS = [
   { id: 'REG-002', maquinariaId: 'MAQ-004', checklistId: 'CHL-001', fechaEjecucion: '2026-06-14', usuario: 'Ana Quispe', resultadoGeneral: 'No Conforme', items: [], firmaDigital: 'AQ-2026', observaciones: 'Se detectó desgaste en correa secundaria.' },
 ];
 
-const INITIAL_ALERTAS = [
-  { id: 'ALT-001', tipo: 'CRITICA', mensaje: 'Paletizadora L3 presenta falla crítica — Línea 3 detenida', maquinaria: 'Paletizadora L3', fechaEnvio: '2026-06-18', estado: 'ENVIADA' },
-  { id: 'ALT-002', tipo: 'PREVENTIVA', mensaje: 'Mantenimiento preventivo pendiente: Corrugadora Principal A', maquinaria: 'Corrugadora Principal A', fechaEnvio: '2026-06-16', estado: 'LEIDA' },
-  { id: 'ALT-003', tipo: 'PREVENTIVA', mensaje: 'Mantenimiento preventivo pendiente: Ranuradora B-12', maquinaria: 'Ranuradora B-12', fechaEnvio: '2026-06-15', estado: 'ENVIADA' },
-  { id: 'ALT-004', tipo: 'INFORMATIVA', mensaje: 'Incidencia INC-003 marcada como Resuelta por Carlos Mendoza', maquinaria: 'Corrugadora Principal A', fechaEnvio: '2026-05-29', estado: 'LEIDA' },
-];
-
 export function AppProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
   const [usuarios, setUsuarios] = useState(INITIAL_USERS);
@@ -95,7 +98,7 @@ export function AppProvider({ children }) {
   const [checklists, setChecklists] = useState(INITIAL_CHECKLISTS);
   const [incidencias, setIncidencias] = useState([]);
   const [registros, setRegistros] = useState(INITIAL_REGISTROS);
-  const [alertas, setAlertas] = useState(INITIAL_ALERTAS);
+  const [alertas, setAlertas] = useState([]);
 
   const login = (correo, contrasena) => {
     const u = usuarios.find(x => x.correo === correo && x.contrasena === contrasena && x.estado);
@@ -111,7 +114,6 @@ export function AppProvider({ children }) {
   const editarUsuario = (id, data) => setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
   const toggleUsuario = (id) => setUsuarios(prev => prev.map(u => u.id === id ? { ...u, estado: !u.estado } : u));
 
-  // --- Maquinaria e Incidencias: persistidas en Supabase ---
   const cargarMaquinaria = useCallback(async () => {
     const { data, error } = await supabase.from('maquinas').select('*').order('fecha_creacion');
     if (error) { console.error('Error cargando maquinaria:', error); return; }
@@ -127,18 +129,30 @@ export function AppProvider({ children }) {
     setIncidencias(data.map(mapIncidencia));
   }, []);
 
+  const cargarAlertas = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('alertas')
+      .select('*')
+      .order('fecha_envio', { ascending: false });
+    if (error) { console.error('Error cargando alertas:', error); return; }
+    setAlertas(data.map(mapAlerta));
+  }, []);
+
   useEffect(() => {
     let activo = true;
     (async () => {
-      const [maq, inc] = await Promise.all([
+      const [maq, inc, alt] = await Promise.all([
         supabase.from('maquinas').select('*').order('fecha_creacion'),
         supabase.from('incidencias').select('*, maquina:maquinas(id, nombre)').order('fecha_registro', { ascending: false }),
+        supabase.from('alertas').select('*').order('fecha_envio', { ascending: false }),
       ]);
       if (!activo) return;
       if (maq.error) console.error('Error cargando maquinaria:', maq.error);
       else setMaquinaria(maq.data.map(mapMaquina));
       if (inc.error) console.error('Error cargando incidencias:', inc.error);
       else setIncidencias(inc.data.map(mapIncidencia));
+      if (alt.error) console.error('Error cargando alertas:', alt.error);
+      else setAlertas(alt.data.map(mapAlerta));
     })();
     return () => { activo = false; };
   }, []);
@@ -192,14 +206,16 @@ export function AppProvider({ children }) {
     });
     if (error) throw error;
     await cargarIncidencias();
-    // La alerta sigue en memoria, las alertas aún no están en la BD
+
     const esAlertaCritica = data.prioridad === 'CRITICA';
-    const alerta = {
-      id: `ALT-${Date.now()}`, tipo: esAlertaCritica ? 'CRITICA' : 'INFORMATIVA',
+    const { error: errorAlerta } = await supabase.from('alertas').insert({
+      tipo: esAlertaCritica ? 'CRITICA' : 'INFORMATIVA',
       mensaje: `${esAlertaCritica ? 'FALLA CRÍTICA' : 'Nueva incidencia'}: ${data.maquinariaNombre} — ${data.descripcion.substring(0, 60)}`,
-      maquinaria: data.maquinariaNombre, fechaEnvio: new Date().toISOString().split('T')[0], estado: 'ENVIADA',
-    };
-    setAlertas(prev => [alerta, ...prev]);
+      maquinaria: data.maquinariaNombre,
+      estado: 'ENVIADA',
+    });
+    if (errorAlerta) console.error('Error guardando alerta:', errorAlerta);
+    await cargarAlertas();
   };
 
   const actualizarIncidencia = async (id, data) => {
@@ -211,6 +227,14 @@ export function AppProvider({ children }) {
     if (data.estado === 'RESUELTA') {
       const inc = incidencias.find(i => i.id === id);
       if (inc?.maquinariaId) await actualizarEstadoMaquina(inc.maquinariaId, 'Operativa');
+      const { error: errorAlerta } = await supabase.from('alertas').insert({
+        tipo: 'INFORMATIVA',
+        mensaje: `Incidencia ${inc?.codigo ?? id} marcada como Resuelta`,
+        maquinaria: inc?.maquinariaNombre ?? '—',
+        estado: 'ENVIADA',
+      });
+      if (errorAlerta) console.error('Error guardando alerta de resolución:', errorAlerta);
+      await cargarAlertas();
     }
     await cargarIncidencias();
   };
@@ -222,7 +246,11 @@ export function AppProvider({ children }) {
     actualizarEstadoMaquina(data.maquinariaId, conforme ? 'Operativa' : 'En Mantenimiento');
   };
 
-  const marcarAlertaLeida = (id) => setAlertas(prev => prev.map(a => a.id === id ? { ...a, estado: 'LEIDA' } : a));
+  const marcarAlertaLeida = async (id) => {
+    const { error } = await supabase.from('alertas').update({ estado: 'LEIDA' }).eq('id', id);
+    if (error) { console.error('Error marcando alerta como leída:', error); return; }
+    await cargarAlertas();
+  };
 
   const alertasNoLeidas = alertas.filter(a => a.estado === 'ENVIADA').length;
 
