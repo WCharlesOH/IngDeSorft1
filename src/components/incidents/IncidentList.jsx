@@ -25,7 +25,7 @@ function IncidentModal({ incidencia, onClose, onUpdate }) {
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content border-0 shadow-lg">
           <div className="modal-header" style={{ background: 'var(--ff-navy)', color: '#fff' }}>
-            <h5 className="modal-title"><i className="bi bi-wrench me-2" />Gestionar Incidencia · {incidencia.id}</h5>
+            <h5 className="modal-title"><i className="bi bi-wrench me-2" />Gestionar Incidencia · {incidencia.codigo}</h5>
             <button className="btn-close btn-close-white" onClick={onClose} />
           </div>
           <div className="modal-body">
@@ -93,7 +93,7 @@ export default function IncidentList({ mostrarHistorial = false }) {
   const filtered = incidencias.filter(i => {
     if (mostrarHistorial && i.estado !== 'RESUELTA') return false;
     const q = search.toLowerCase();
-    return (i.maquinariaNombre.toLowerCase().includes(q) || i.id.toLowerCase().includes(q) || i.descripcion.toLowerCase().includes(q))
+    return (i.maquinariaNombre.toLowerCase().includes(q) || (i.codigo ?? '').toLowerCase().includes(q) || i.descripcion.toLowerCase().includes(q))
       && (!filtroEstado || i.estado === filtroEstado)
       && (!filtroPrio || i.prioridad === filtroPrio);
   });
@@ -155,7 +155,7 @@ export default function IncidentList({ mostrarHistorial = false }) {
           <tbody>
             {filtered.map(inc => (
               <tr key={inc.id}>
-                <td><code style={{ fontSize: '0.75rem' }}>{inc.id}</code></td>
+                <td><code style={{ fontSize: '0.75rem' }}>{inc.codigo}</code></td>
                 <td><small className="fw-semibold">{inc.maquinariaNombre}</small></td>
                 <td><small>{inc.categoria}</small></td>
                 <td>

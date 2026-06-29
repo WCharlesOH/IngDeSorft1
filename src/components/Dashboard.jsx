@@ -147,7 +147,7 @@ export default function Dashboard({ setVista, setMaquinaSeleccionada }) {
                 <tbody>
                   {recientes.map(inc => (
                     <tr key={inc.id}>
-                      <td><small className="text-muted">{inc.id}</small></td>
+                      <td><small className="text-muted">{inc.codigo}</small></td>
                       <td><small>{inc.maquinariaNombre}</small></td>
                       <td><small>{inc.categoria}</small></td>
                       <td><span className={`ff-status-badge ff-badge-${inc.prioridad.toLowerCase()}`} style={{ fontSize: '0.68rem' }}>{inc.prioridad}</span></td>

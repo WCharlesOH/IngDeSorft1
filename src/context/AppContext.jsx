@@ -1,4 +1,42 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { supabase } from '../supabase';
+
+async function siguienteCodigo(nombre, prefijo) {
+  const { data, error } = await supabase.rpc('siguiente_valor', { p_nombre: nombre });
+  if (error) throw error;
+  return `${prefijo}${data}`;
+}
+
+function mapMaquina(r) {
+  return {
+    id: r.id,
+    codigoUnico: r.codigo_unico,
+    nombre: r.nombre,
+    linea: r.linea,
+    tipo: r.tipo,
+    estado: r.estado,
+    ubicacion: r.ubicacion,
+    fechaCreacion: r.fecha_creacion,
+  };
+}
+
+// La consulta trae la máquina anidada, espera maquinariaId/maquinariaNombre planos.
+function mapIncidencia(r) {
+  return {
+    id: r.id,
+    codigo: r.codigo,
+    maquinariaId: r.maquina_id,
+    maquinariaNombre: r.maquina?.nombre ?? '—',
+    categoria: r.categoria,
+    descripcion: r.descripcion,
+    prioridad: r.prioridad,
+    estado: r.estado,
+    fechaRegistro: (r.fecha_registro ?? '').split('T')[0],
+    reportadoPor: r.reportado_por ?? '',
+    comentarioTecnico: r.comentario_tecnico ?? '',
+    evidenciaUrl: r.evidencia_url ?? null,
+  };
+}
 
 const AppContext = createContext(null);
 
@@ -7,14 +45,6 @@ const INITIAL_USERS = [
   { id: 'U2', nombre: 'Carlos Mendoza', correo: 'supervisor@carvimsa.com', contrasena: 'super123', rol: 'supervisor', estado: true, fechaRegistro: '2024-01-10' },
   { id: 'U3', nombre: 'Luis Torres', correo: 'operario@carvimsa.com', contrasena: 'oper123', rol: 'operario', estado: true, fechaRegistro: '2024-01-15' },
   { id: 'U4', nombre: 'Ana Quispe', correo: 'a.quispe@carvimsa.com', contrasena: 'oper456', rol: 'operario', estado: true, fechaRegistro: '2024-02-01' },
-];
-
-const INITIAL_MAQUINARIA = [
-  { id: 'MAQ-001', codigoUnico: 'FF-2024-001', nombre: 'Corrugadora Principal A', linea: 'Línea 1', tipo: 'Corrugadora', estado: 'Operativa', ubicacion: 'Nave A', fechaCreacion: '2024-01-15' },
-  { id: 'MAQ-002', codigoUnico: 'FF-2024-002', nombre: 'Ranuradora B-12', linea: 'Línea 2', tipo: 'Ranuradora', estado: 'En Mantenimiento', ubicacion: 'Nave B', fechaCreacion: '2024-01-20' },
-  { id: 'MAQ-003', codigoUnico: 'FF-2024-003', nombre: 'Paletizadora L3', linea: 'Línea 3', tipo: 'Paletizadora', estado: 'Con Falla', ubicacion: 'Nave C', fechaCreacion: '2024-02-01' },
-  { id: 'MAQ-004', codigoUnico: 'FF-2024-004', nombre: 'Corrugadora Secundaria B', linea: 'Línea 1', tipo: 'Corrugadora', estado: 'Operativa', ubicacion: 'Nave A', fechaCreacion: '2024-02-10' },
-  { id: 'MAQ-005', codigoUnico: 'FF-2024-005', nombre: 'Línea Continua C-7', linea: 'Línea 4', tipo: 'Línea Continua', estado: 'Operativa', ubicacion: 'Nave D', fechaCreacion: '2024-03-01' },
 ];
 
 const INITIAL_CHECKLISTS = [
@@ -46,13 +76,6 @@ const INITIAL_CHECKLISTS = [
   },
 ];
 
-const INITIAL_INCIDENCIAS = [
-  { id: 'INC-001', maquinariaId: 'MAQ-002', maquinariaNombre: 'Ranuradora B-12', categoria: 'Mecánica', descripcion: 'Desgaste excesivo en cuchillas de ranura, afecta calidad de corte.', prioridad: 'ALTA', estado: 'EN_PROCESO', fechaRegistro: '2026-06-10', reportadoPor: 'Luis Torres', comentarioTecnico: 'Se programó reemplazo de cuchillas para el turno noche.', evidenciaUrl: null },
-  { id: 'INC-002', maquinariaId: 'MAQ-003', maquinariaNombre: 'Paletizadora L3', categoria: 'Eléctrica', descripcion: 'Fallo en motor principal del brazo paletizador, parada inesperada de línea 3.', prioridad: 'CRITICA', estado: 'ABIERTA', fechaRegistro: '2026-06-18', reportadoPor: 'Ana Quispe', comentarioTecnico: '', evidenciaUrl: null },
-  { id: 'INC-003', maquinariaId: 'MAQ-001', maquinariaNombre: 'Corrugadora Principal A', categoria: 'Mecánica', descripcion: 'Vibración anormal en rodillo de presión durante producción.', prioridad: 'MEDIA', estado: 'RESUELTA', fechaRegistro: '2026-05-28', reportadoPor: 'Luis Torres', comentarioTecnico: 'Se ajustaron tornillos de fijación y se lubricó el eje. Máquina operativa.', evidenciaUrl: null },
-  { id: 'INC-004', maquinariaId: 'MAQ-001', maquinariaNombre: 'Corrugadora Principal A', categoria: 'Eléctrica', descripcion: 'Fallo intermitente en tablero de control principal.', prioridad: 'ALTA', estado: 'RESUELTA', fechaRegistro: '2026-04-15', reportadoPor: 'Luis Torres', comentarioTecnico: 'Reemplazo de tarjeta de control. Máquina operativa.', evidenciaUrl: null },
-];
-
 const INITIAL_REGISTROS = [
   { id: 'REG-001', maquinariaId: 'MAQ-001', checklistId: 'CHL-001', fechaEjecucion: '2026-06-15', usuario: 'Luis Torres', resultadoGeneral: 'Conforme', items: [], firmaDigital: 'LT-2026', observaciones: 'Todo en orden, lubricación al día.' },
   { id: 'REG-002', maquinariaId: 'MAQ-004', checklistId: 'CHL-001', fechaEjecucion: '2026-06-14', usuario: 'Ana Quispe', resultadoGeneral: 'No Conforme', items: [], firmaDigital: 'AQ-2026', observaciones: 'Se detectó desgaste en correa secundaria.' },
@@ -68,9 +91,9 @@ const INITIAL_ALERTAS = [
 export function AppProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
   const [usuarios, setUsuarios] = useState(INITIAL_USERS);
-  const [maquinaria, setMaquinaria] = useState(INITIAL_MAQUINARIA);
+  const [maquinaria, setMaquinaria] = useState([]);
   const [checklists, setChecklists] = useState(INITIAL_CHECKLISTS);
-  const [incidencias, setIncidencias] = useState(INITIAL_INCIDENCIAS);
+  const [incidencias, setIncidencias] = useState([]);
   const [registros, setRegistros] = useState(INITIAL_REGISTROS);
   const [alertas, setAlertas] = useState(INITIAL_ALERTAS);
 
@@ -88,25 +111,88 @@ export function AppProvider({ children }) {
   const editarUsuario = (id, data) => setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
   const toggleUsuario = (id) => setUsuarios(prev => prev.map(u => u.id === id ? { ...u, estado: !u.estado } : u));
 
-  const agregarMaquina = (data) => {
-    const id = `MAQ-${String(maquinaria.length + 1).padStart(3, '0')}`;
-    const codigo = `FF-${new Date().getFullYear()}-${String(maquinaria.length + 1).padStart(3, '0')}`;
-    const nueva = { ...data, id, codigoUnico: codigo, estado: 'Operativa', fechaCreacion: new Date().toISOString().split('T')[0] };
-    setMaquinaria(prev => [...prev, nueva]);
-    return nueva;
+  // --- Maquinaria e Incidencias: persistidas en Supabase ---
+  const cargarMaquinaria = useCallback(async () => {
+    const { data, error } = await supabase.from('maquinas').select('*').order('fecha_creacion');
+    if (error) { console.error('Error cargando maquinaria:', error); return; }
+    setMaquinaria(data.map(mapMaquina));
+  }, []);
+
+  const cargarIncidencias = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('incidencias')
+      .select('*, maquina:maquinas(id, nombre)')
+      .order('fecha_registro', { ascending: false });
+    if (error) { console.error('Error cargando incidencias:', error); return; }
+    setIncidencias(data.map(mapIncidencia));
+  }, []);
+
+  useEffect(() => {
+    let activo = true;
+    (async () => {
+      const [maq, inc] = await Promise.all([
+        supabase.from('maquinas').select('*').order('fecha_creacion'),
+        supabase.from('incidencias').select('*, maquina:maquinas(id, nombre)').order('fecha_registro', { ascending: false }),
+      ]);
+      if (!activo) return;
+      if (maq.error) console.error('Error cargando maquinaria:', maq.error);
+      else setMaquinaria(maq.data.map(mapMaquina));
+      if (inc.error) console.error('Error cargando incidencias:', inc.error);
+      else setIncidencias(inc.data.map(mapIncidencia));
+    })();
+    return () => { activo = false; };
+  }, []);
+
+  const agregarMaquina = async (data) => {
+    const codigo = await siguienteCodigo('maquina', 'M');
+    const { error } = await supabase.from('maquinas').insert({
+      codigo_unico: codigo,
+      nombre: data.nombre,
+      linea: data.linea,
+      tipo: data.tipo,
+      ubicacion: data.ubicacion,
+    });
+    if (error) throw error;
+    await cargarMaquinaria();
   };
-  const editarMaquina = (id, data) => setMaquinaria(prev => prev.map(m => m.id === id ? { ...m, ...data } : m));
-  const actualizarEstadoMaquina = (id, estado) => setMaquinaria(prev => prev.map(m => m.id === id ? { ...m, estado } : m));
+
+  const editarMaquina = async (id, data) => {
+    const { error } = await supabase.from('maquinas').update({
+      nombre: data.nombre,
+      linea: data.linea,
+      tipo: data.tipo,
+      ubicacion: data.ubicacion,
+      estado: data.estado,
+    }).eq('id', id);
+    if (error) throw error;
+    await cargarMaquinaria();
+  };
+
+  const actualizarEstadoMaquina = async (id, estado) => {
+    const { error } = await supabase.from('maquinas').update({ estado }).eq('id', id);
+    if (error) throw error;
+    await cargarMaquinaria();
+  };
 
   const agregarChecklist = (data) => {
     const nuevo = { ...data, id: `CHL-${Date.now()}`, estado: true, fechaCreacion: new Date().toISOString().split('T')[0] };
     setChecklists(prev => [...prev, nuevo]);
   };
 
-  const agregarIncidencia = (data) => {
-    const id = `INC-${String(incidencias.length + 1).padStart(3, '0')}`;
-    const nueva = { ...data, id, estado: 'ABIERTA', fechaRegistro: new Date().toISOString().split('T')[0], comentarioTecnico: '' };
-    setIncidencias(prev => [...prev, nueva]);
+  const agregarIncidencia = async (data) => {
+    const codigo = await siguienteCodigo('incidencia', 'INC');
+    const { error } = await supabase.from('incidencias').insert({
+      codigo,
+      maquina_id: data.maquinariaId,
+      categoria: data.categoria,
+      descripcion: data.descripcion,
+      prioridad: data.prioridad,
+      reportado_por: data.reportadoPor ?? null,
+      evidencia_url: data.evidenciaUrl ?? null,
+    });
+    if (error) throw error;
+    await cargarIncidencias();
+    // La alerta sigue en memoria, las alertas aún no están en la BD
     const esAlertaCritica = data.prioridad === 'CRITICA';
     const alerta = {
       id: `ALT-${Date.now()}`, tipo: esAlertaCritica ? 'CRITICA' : 'INFORMATIVA',
@@ -116,12 +202,17 @@ export function AppProvider({ children }) {
     setAlertas(prev => [alerta, ...prev]);
   };
 
-  const actualizarIncidencia = (id, data) => {
-    setIncidencias(prev => prev.map(inc => inc.id === id ? { ...inc, ...data } : inc));
+  const actualizarIncidencia = async (id, data) => {
+    const { error } = await supabase.from('incidencias').update({
+      estado: data.estado,
+      comentario_tecnico: data.comentarioTecnico ?? null,
+    }).eq('id', id);
+    if (error) throw error;
     if (data.estado === 'RESUELTA') {
       const inc = incidencias.find(i => i.id === id);
-      if (inc) actualizarEstadoMaquina(inc.maquinariaId, 'Operativa');
+      if (inc?.maquinariaId) await actualizarEstadoMaquina(inc.maquinariaId, 'Operativa');
     }
+    await cargarIncidencias();
   };
 
   const agregarRegistro = (data) => {
