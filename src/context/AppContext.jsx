@@ -99,6 +99,7 @@ export function AppProvider({ children }) {
   const [incidencias, setIncidencias] = useState([]);
   const [registros, setRegistros] = useState(INITIAL_REGISTROS);
   const [alertas, setAlertas] = useState([]);
+  const [mantenimientosCorrectivos, setMantenimientosCorrectivos] = useState([]);
 
   const login = (correo, contrasena) => {
     const u = usuarios.find(x => x.correo === correo && x.contrasena === contrasena && x.estado);
@@ -106,6 +107,15 @@ export function AppProvider({ children }) {
     return false;
   };
   const logout = () => setUsuario(null);
+
+  const recoverPassword = (correo) => {
+    const email = correo?.trim().toLowerCase();
+    const u = usuarios.find(x => x.correo.toLowerCase() === email && x.estado);
+    if (u) {
+      return { ok: true, message: `Se han enviado las instrucciones para restablecer tu contraseña a ${correo}.` };
+    }
+    return { ok: false, message: 'El correo ingresado no se encuentra registrado.' };
+  };
 
   const agregarUsuario = (data) => {
     const nuevo = { ...data, id: `U${Date.now()}`, estado: true, fechaRegistro: new Date().toISOString().split('T')[0] };
@@ -252,17 +262,34 @@ export function AppProvider({ children }) {
     await cargarAlertas();
   };
 
+  const agregarMantenimientoCorrectivo = (data) => {
+    const nuevo = {
+      id: `MNT-${Date.now()}`,
+      maquinariaId: data.maquinariaId,
+      maquinariaNombre: data.maquinariaNombre,
+      descripcion: data.descripcion,
+      repuestos: data.repuestos,
+      observaciones: data.observaciones,
+      registradoPor: data.registradoPor ?? 'Operario',
+      fechaRegistro: new Date().toISOString().split('T')[0],
+    };
+    setMantenimientosCorrectivos(prev => [nuevo, ...prev]);
+    setMaquinaria(prev => prev.map(m => m.id === data.maquinariaId ? { ...m, estado: 'Operativa' } : m));
+    return nuevo;
+  };
+
   const alertasNoLeidas = alertas.filter(a => a.estado === 'ENVIADA').length;
 
   return (
     <AppContext.Provider value={{
-      usuario, login, logout,
+      usuario, login, logout, recoverPassword,
       usuarios, agregarUsuario, editarUsuario, toggleUsuario,
       maquinaria, agregarMaquina, editarMaquina, actualizarEstadoMaquina,
       checklists, agregarChecklist,
       incidencias, agregarIncidencia, actualizarIncidencia,
       registros, agregarRegistro,
       alertas, marcarAlertaLeida, alertasNoLeidas,
+      mantenimientosCorrectivos, agregarMantenimientoCorrectivo,
     }}>
       {children}
     </AppContext.Provider>

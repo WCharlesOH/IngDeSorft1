@@ -10,16 +10,20 @@ const PRIORIDADES = [
 ];
 
 export default function IncidentReport() {
-  const { maquinaria, agregarIncidencia, usuario } = useApp();
+  const { maquinaria, agregarIncidencia, agregarMantenimientoCorrectivo, usuario } = useApp();
   const [form, setForm] = useState({ maquinariaId: '', categoria: '', descripcion: '', prioridad: '' });
   const [foto, setFoto] = useState(null);
   const [errores, setErrores] = useState({});
   const [done, setDone] = useState(null);
+  const [repairForm, setRepairForm] = useState({ maquinariaId: '', descripcion: '', repuestos: '', observaciones: '' });
+  const [repairErrors, setRepairErrors] = useState({});
+  const [repairDone, setRepairDone] = useState(null);
   const fileRef = useRef();
 
   const set = (k, v) => { setForm(p => ({ ...p, [k]: v })); setErrores(p => ({ ...p, [k]: '' })); };
 
   const maquina = maquinaria.find(m => m.id === form.maquinariaId);
+  const maquinaCorrectiva = maquinaria.find(m => m.id === repairForm.maquinariaId);
 
   const handleFoto = (e) => {
     const f = e.target.files[0];
@@ -46,6 +50,27 @@ export default function IncidentReport() {
     const nueva = { ...form, maquinariaNombre: maquina.nombre, evidenciaUrl: foto.url, reportadoPor: usuario.nombre };
     agregarIncidencia(nueva);
     setDone(nueva);
+  };
+
+  const setRepair = (k, v) => { setRepairForm(p => ({ ...p, [k]: v })); setRepairErrors(p => ({ ...p, [k]: '' })); };
+
+  const validateRepair = () => {
+    const err = {};
+    if (!repairForm.maquinariaId) err.maquinariaId = 'Seleccione una máquina.';
+    if (!repairForm.descripcion.trim()) err.descripcion = 'Debe describir la reparación realizada.';
+    return err;
+  };
+
+  const handleRepairSubmit = () => {
+    const err = validateRepair();
+    if (Object.keys(err).length > 0) { setRepairErrors(err); return; }
+    const nuevo = agregarMantenimientoCorrectivo({
+      ...repairForm,
+      maquinariaNombre: maquinaCorrectiva?.nombre ?? 'Máquina',
+      registradoPor: usuario?.nombre ?? 'Operario',
+    });
+    setRepairDone(nuevo);
+    setRepairForm({ maquinariaId: '', descripcion: '', repuestos: '', observaciones: '' });
   };
 
   const reset = () => { setForm({ maquinariaId: '', categoria: '', descripcion: '', prioridad: '' }); setFoto(null); setErrores({}); setDone(null); };
@@ -84,7 +109,7 @@ export default function IncidentReport() {
 
       <div className="row g-4">
         <div className="col-lg-8">
-          <div className="ff-card">
+          <div className="ff-card mb-4">
             <div className="ff-card-header"><i className="bi bi-exclamation-circle me-2" />Datos de la Incidencia</div>
             <div className="p-4">
               {/* Máquina */}
@@ -172,6 +197,54 @@ export default function IncidentReport() {
 
               <button className="btn btn-ff-primary w-100 py-2" onClick={handleSubmit}>
                 <i className="bi bi-send me-2" />Enviar Reporte de Incidencia
+              </button>
+            </div>
+          </div>
+
+          <div className="ff-card">
+            <div className="ff-card-header"><i className="bi bi-wrench-adjustable me-2" />Registrar Mantenimiento Correctivo</div>
+            <div className="p-4">
+              <div className="mb-3">
+                <label className="ff-form-label">Máquina reparada *</label>
+                <select className={`form-select ${repairErrors.maquinariaId ? 'is-invalid' : ''}`} value={repairForm.maquinariaId} onChange={e => setRepair('maquinariaId', e.target.value)}>
+                  <option value="">-- Seleccione la máquina --</option>
+                  {maquinaria.map(m => <option key={m.id} value={m.id}>{m.nombre} ({m.codigoUnico})</option>)}
+                </select>
+                {repairErrors.maquinariaId && <div className="invalid-feedback d-block">{repairErrors.maquinariaId}</div>}
+                {maquinaCorrectiva && (
+                  <div className="mt-2 p-2 bg-light rounded d-flex align-items-center gap-2" style={{ fontSize: '0.8rem' }}>
+                    <i className="bi bi-geo-alt text-muted" />{maquinaCorrectiva.linea} · {maquinaCorrectiva.ubicacion}
+                    <span className={`badge ms-auto ${maquinaCorrectiva.estado === 'Operativa' ? 'bg-success' : maquinaCorrectiva.estado === 'En Mantenimiento' ? 'bg-warning text-dark' : 'bg-danger'}`}>{maquinaCorrectiva.estado}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mb-3">
+                <label className="ff-form-label">Descripción de la reparación *</label>
+                <textarea className={`form-control ${repairErrors.descripcion ? 'is-invalid' : ''}`} rows={4}
+                  value={repairForm.descripcion} onChange={e => setRepair('descripcion', e.target.value)}
+                  placeholder="Describa claramente la reparación realizada, fallas corregidas y acciones tomadas..." />
+                {repairErrors.descripcion && <div className="invalid-feedback d-block">{repairErrors.descripcion}</div>}
+              </div>
+
+              <div className="mb-3">
+                <label className="ff-form-label">Repuestos utilizados</label>
+                <textarea className="form-control" rows={3} value={repairForm.repuestos} onChange={e => setRepair('repuestos', e.target.value)} placeholder="Liste los repuestos, materiales o componentes reemplazados." />
+              </div>
+
+              <div className="mb-3">
+                <label className="ff-form-label">Observaciones</label>
+                <textarea className="form-control" rows={3} value={repairForm.observaciones} onChange={e => setRepair('observaciones', e.target.value)} placeholder="Agregue observaciones adicionales del mantenimiento." />
+              </div>
+
+              {repairDone && (
+                <div className="alert alert-success py-2 mb-3">
+                  <i className="bi bi-check-circle-fill me-1" />Mantenimiento correctivo registrado correctamente. El estado de la máquina fue actualizado a Operativa.
+                </div>
+              )}
+
+              <button className="btn btn-ff-primary w-100 py-2" onClick={handleRepairSubmit}>
+                <i className="bi bi-wrench me-2" />Guardar mantenimiento correctivo
               </button>
             </div>
           </div>
