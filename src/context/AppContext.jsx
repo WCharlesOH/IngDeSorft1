@@ -99,6 +99,7 @@ export function AppProvider({ children }) {
   const [incidencias, setIncidencias] = useState([]);
   const [registros, setRegistros] = useState(INITIAL_REGISTROS);
   const [alertas, setAlertas] = useState([]);
+  const [alertSettings, setAlertSettings] = useState({ criticas: true, informativas: true });
   const [mantenimientosCorrectivos, setMantenimientosCorrectivos] = useState([]);
 
   const login = (correo, contrasena) => {
@@ -218,14 +219,18 @@ export function AppProvider({ children }) {
     await cargarIncidencias();
 
     const esAlertaCritica = data.prioridad === 'CRITICA';
-    const { error: errorAlerta } = await supabase.from('alertas').insert({
-      tipo: esAlertaCritica ? 'CRITICA' : 'INFORMATIVA',
-      mensaje: `${esAlertaCritica ? 'FALLA CRÍTICA' : 'Nueva incidencia'}: ${data.maquinariaNombre} — ${data.descripcion.substring(0, 60)}`,
-      maquinaria: data.maquinariaNombre,
-      estado: 'ENVIADA',
-    });
-    if (errorAlerta) console.error('Error guardando alerta:', errorAlerta);
-    await cargarAlertas();
+    const tipoAlerta = esAlertaCritica ? 'CRITICA' : 'INFORMATIVA';
+    const debeGuardarAlerta = (tipoAlerta === 'CRITICA' && alertSettings.criticas) || (tipoAlerta === 'INFORMATIVA' && alertSettings.informativas);
+    if (debeGuardarAlerta) {
+      const { error: errorAlerta } = await supabase.from('alertas').insert({
+        tipo: tipoAlerta,
+        mensaje: `${esAlertaCritica ? 'FALLA CRÍTICA' : 'Nueva incidencia'}: ${data.maquinariaNombre} — ${data.descripcion.substring(0, 60)}`,
+        maquinaria: data.maquinariaNombre,
+        estado: 'ENVIADA',
+      });
+      if (errorAlerta) console.error('Error guardando alerta:', errorAlerta);
+      await cargarAlertas();
+    }
   };
 
   const actualizarIncidencia = async (id, data) => {
@@ -237,14 +242,16 @@ export function AppProvider({ children }) {
     if (data.estado === 'RESUELTA') {
       const inc = incidencias.find(i => i.id === id);
       if (inc?.maquinariaId) await actualizarEstadoMaquina(inc.maquinariaId, 'Operativa');
-      const { error: errorAlerta } = await supabase.from('alertas').insert({
-        tipo: 'INFORMATIVA',
-        mensaje: `Incidencia ${inc?.codigo ?? id} marcada como Resuelta`,
-        maquinaria: inc?.maquinariaNombre ?? '—',
-        estado: 'ENVIADA',
-      });
-      if (errorAlerta) console.error('Error guardando alerta de resolución:', errorAlerta);
-      await cargarAlertas();
+      if (alertSettings.informativas) {
+        const { error: errorAlerta } = await supabase.from('alertas').insert({
+          tipo: 'INFORMATIVA',
+          mensaje: `Incidencia ${inc?.codigo ?? id} marcada como Resuelta`,
+          maquinaria: inc?.maquinariaNombre ?? '—',
+          estado: 'ENVIADA',
+        });
+        if (errorAlerta) console.error('Error guardando alerta de resolución:', errorAlerta);
+        await cargarAlertas();
+      }
     }
     await cargarIncidencias();
   };
@@ -260,6 +267,10 @@ export function AppProvider({ children }) {
     const { error } = await supabase.from('alertas').update({ estado: 'LEIDA' }).eq('id', id);
     if (error) { console.error('Error marcando alerta como leída:', error); return; }
     await cargarAlertas();
+  };
+
+  const guardarConfiguracionAlertas = (data) => {
+    setAlertSettings(data);
   };
 
   const agregarMantenimientoCorrectivo = (data) => {
@@ -289,6 +300,7 @@ export function AppProvider({ children }) {
       incidencias, agregarIncidencia, actualizarIncidencia,
       registros, agregarRegistro,
       alertas, marcarAlertaLeida, alertasNoLeidas,
+      alertSettings, guardarConfiguracionAlertas,
       mantenimientosCorrectivos, agregarMantenimientoCorrectivo,
     }}>
       {children}
