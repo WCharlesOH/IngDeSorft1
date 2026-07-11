@@ -2,6 +2,14 @@
 -- FixFlow — Datos demo para Supabase
 -- ============================================================
 
+-- Usuarios (los mismos que estaban hardcodeados en AppContext.jsx)
+insert into usuarios (nombre, correo, contrasena, rol, estado, fecha_registro) values
+  ('Admin Sistema',   'admin@carvimsa.com',      'admin123', 'administrador', true, '2024-01-01'),
+  ('Carlos Mendoza',  'supervisor@carvimsa.com', 'super123', 'supervisor',    true, '2024-01-10'),
+  ('Luis Torres',     'operario@carvimsa.com',   'oper123',  'operario',      true, '2024-01-15'),
+  ('Ana Quispe',      'a.quispe@carvimsa.com',   'oper456',  'operario',      true, '2024-02-01')
+on conflict (correo) do nothing;
+
 -- Máquinas (M1..M5)
 insert into maquinas (codigo_unico, nombre, linea, tipo, estado, ubicacion) values
   ('M1', 'Corrugadora Principal A',  'Línea 1', 'Corrugadora',    'Operativa',        'Nave A'),
@@ -27,6 +35,63 @@ insert into incidencias (codigo, maquina_id, categoria, descripcion, prioridad, 
 select 'INC4', id, 'Eléctrica', 'Fallo intermitente en tablero de control principal.', 'ALTA', 'RESUELTA', 'Luis Torres', 'Reemplazo de tarjeta de control. Máquina operativa.'
 from maquinas where nombre = 'Corrugadora Principal A';
 
+-- Alertas (una crítica por INC2, una informativa por la resolución de INC3)
+insert into alertas (tipo, mensaje, maquinaria, estado)
+values
+  ('CRITICA', 'FALLA CRÍTICA: Paletizadora L3 — Fallo en motor principal del brazo paletizador', 'Paletizadora L3', 'ENVIADA'),
+  ('INFORMATIVA', 'Incidencia INC3 marcada como Resuelta', 'Corrugadora Principal A', 'LEIDA');
+
+-- Checklists de mantenimiento preventivo (HU05) con sus tareas
+with ck1 as (
+  insert into checklists (nombre, tipo_maquina, estado, fecha_creacion)
+  values ('Mantenimiento Preventivo Corrugadora', 'Corrugadora', true, '2024-03-01')
+  returning id
+)
+insert into checklist_items (checklist_id, tarea, obligatorio, orden)
+select id, tarea, obligatorio, orden from ck1, (values
+  ('Verificar tensión de correa principal', true, 1),
+  ('Inspeccionar rodillos de presión',       true, 2),
+  ('Lubricar cadenas de transmisión',        true, 3),
+  ('Revisar sistema eléctrico',              false, 4),
+  ('Limpiar filtros de aspiración',          true, 5)
+) as t(tarea, obligatorio, orden);
+
+with ck2 as (
+  insert into checklists (nombre, tipo_maquina, estado, fecha_creacion)
+  values ('Inspección Ranuradora', 'Ranuradora', true, '2024-03-10')
+  returning id
+)
+insert into checklist_items (checklist_id, tarea, obligatorio, orden)
+select id, tarea, obligatorio, orden from ck2, (values
+  ('Verificar cuchillas de ranura', true, 1),
+  ('Calibrar presión de corte',     true, 2),
+  ('Revisar sistema de avance',     true, 3)
+) as t(tarea, obligatorio, orden);
+
+with ck3 as (
+  insert into checklists (nombre, tipo_maquina, estado, fecha_creacion)
+  values ('Revisión Paletizadora', 'Paletizadora', true, '2024-04-01')
+  returning id
+)
+insert into checklist_items (checklist_id, tarea, obligatorio, orden)
+select id, tarea, obligatorio, orden from ck3, (values
+  ('Inspeccionar brazo robótico',        true, 1),
+  ('Verificar sensores de posición',     true, 2),
+  ('Revisar sistema neumático',          false, 3)
+) as t(tarea, obligatorio, orden);
+
+-- Registros de ejecución de checklist (HU06)
+insert into registros_checklist (maquina_id, checklist_id, usuario_nombre, fecha_ejecucion, resultado_general, firma_digital, observaciones)
+select m.id, c.id, 'Luis Torres', '2026-06-15', 'Conforme', 'LT-2026', 'Todo en orden, lubricación al día.'
+from maquinas m, checklists c
+where m.nombre = 'Corrugadora Principal A' and c.nombre = 'Mantenimiento Preventivo Corrugadora';
+
+insert into registros_checklist (maquina_id, checklist_id, usuario_nombre, fecha_ejecucion, resultado_general, firma_digital, observaciones)
+select m.id, c.id, 'Ana Quispe', '2026-06-14', 'No Conforme', 'AQ-2026', 'Se detectó desgaste en correa secundaria.'
+from maquinas m, checklists c
+where m.nombre = 'Corrugadora Secundaria B' and c.nombre = 'Mantenimiento Preventivo Corrugadora';
+
 -- Contadores: los próximos generados por la app serán M6 / INC5
 insert into contadores (nombre, valor) values ('maquina', 5), ('incidencia', 4)
 on conflict (nombre) do update set valor = excluded.valor;
+
