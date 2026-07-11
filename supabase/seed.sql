@@ -36,10 +36,13 @@ select 'INC4', id, 'Eléctrica', 'Fallo intermitente en tablero de control princ
 from maquinas where nombre = 'Corrugadora Principal A';
 
 -- Alertas (una crítica por INC2, una informativa por la resolución de INC3)
-insert into alertas (tipo, mensaje, maquinaria, estado)
-values
-  ('CRITICA', 'FALLA CRÍTICA: Paletizadora L3 — Fallo en motor principal del brazo paletizador', 'Paletizadora L3', 'ENVIADA'),
-  ('INFORMATIVA', 'Incidencia INC3 marcada como Resuelta', 'Corrugadora Principal A', 'LEIDA');
+insert into alertas (maquina_id, tipo, mensaje, maquinaria, estado)
+select id, 'CRITICA', 'FALLA CRÍTICA: Paletizadora L3 — Fallo en motor principal del brazo paletizador', 'Paletizadora L3', 'ENVIADA'
+from maquinas where nombre = 'Paletizadora L3';
+
+insert into alertas (maquina_id, tipo, mensaje, maquinaria, estado)
+select id, 'INFORMATIVA', 'Incidencia INC3 marcada como Resuelta', 'Corrugadora Principal A', 'LEIDA'
+from maquinas where nombre = 'Corrugadora Principal A';
 
 -- Checklists de mantenimiento preventivo (HU05) con sus tareas
 with ck1 as (
@@ -94,4 +97,5 @@ where m.nombre = 'Corrugadora Secundaria B' and c.nombre = 'Mantenimiento Preven
 -- Contadores: los próximos generados por la app serán M6 / INC5
 insert into contadores (nombre, valor) values ('maquina', 5), ('incidencia', 4)
 on conflict (nombre) do update set valor = excluded.valor;
+
 
