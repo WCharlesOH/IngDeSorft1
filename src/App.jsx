@@ -9,10 +9,7 @@ import ChecklistBuilder from './components/checklists/ChecklistBuilder';
 import ChecklistExecution from './components/checklists/ChecklistExecution';
 import IncidentReport from './components/incidents/IncidentReport';
 import IncidentList from './components/incidents/IncidentList';
-import Reportes from './components/reports/Reportes';
 import AlertPanel from './components/alerts/AlertPanel';
-import AlertSettings from './components/alerts/AlertSettings';
-
 
 function AppContent() {
   const { usuario } = useApp();
@@ -35,9 +32,8 @@ function AppContent() {
       case 'mis-registros': return <IncidentList />;
       case 'reportar':      return <IncidentReport />;
       case 'historial':     return <IncidentList mostrarHistorial={true} />;
-      case 'metricas':      return <Reportes />;
+      case 'metricas':      return <Dashboard setVista={cambiarVista} />;
       case 'alertas':       return <AlertPanel />;
-      case 'alert-config':  return <AlertSettings />;
       default:              return <Dashboard setVista={cambiarVista} />;
     }
   };

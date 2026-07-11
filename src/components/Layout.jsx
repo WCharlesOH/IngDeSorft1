@@ -11,7 +11,6 @@ const MENU = {
     { section: 'Monitoreo' },
     { key: 'incidencias', icon: 'bi-exclamation-triangle', label: 'Incidencias' },
     { key: 'alertas', icon: 'bi-bell', label: 'Alertas' },
-    { key: 'alert-config', icon: 'bi-sliders', label: 'Configuración Alertas' },
   ],
   supervisor: [
     { section: 'General' },
@@ -22,7 +21,7 @@ const MENU = {
     { key: 'incidencias', icon: 'bi-exclamation-triangle', label: 'Gestión Incidencias' },
     { section: 'Análisis' },
     { key: 'historial', icon: 'bi-clock-history', label: 'Historial de Fallas' },
-    { key: 'metricas', icon: 'bi-bar-chart-line', label: 'Reportes' },
+    { key: 'metricas', icon: 'bi-bar-chart-line', label: 'Métricas' },
     { key: 'alertas', icon: 'bi-bell', label: 'Alertas' },
   ],
   operario: [
