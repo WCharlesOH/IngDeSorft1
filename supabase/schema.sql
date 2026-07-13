@@ -47,9 +47,10 @@ create table if not exists incidencias (
 -- pero no existía en el schema original: sin ella el módulo de alertas fallaba en producción.
 create table if not exists alertas (
   id          uuid primary key default gen_random_uuid(),
+  maquina_id  uuid references maquinas(id) on delete set null,
   tipo        text not null check (tipo in ('CRITICA', 'INFORMATIVA')),
   mensaje     text not null,
-  maquinaria  text not null,
+  maquinaria  text not null, -- nombre desnormalizado, se mantiene para no romper AppContext.jsx
   fecha_envio timestamptz not null default now(),
   estado      text not null default 'ENVIADA' check (estado in ('ENVIADA', 'LEIDA'))
 );
