@@ -7,6 +7,18 @@ async function siguienteCodigo(nombre, prefijo) {
   return `${prefijo}${data}`;
 }
 
+function mapUsuario(r) {
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    correo: r.correo,
+    contrasena: r.contrasena,
+    rol: r.rol,
+    estado: r.estado,
+    fechaRegistro: (r.fecha_registro ?? '').split('T')[0],
+  };
+}
+
 function mapMaquina(r) {
   return {
     id: r.id,
@@ -48,76 +60,75 @@ function mapAlerta(r) {
   };
 }
 
+function mapChecklist(r) {
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    tipoMaquina: r.tipo_maquina,
+    estado: r.estado,
+    fechaCreacion: (r.fecha_creacion ?? '').split('T')[0],
+    items: (r.checklist_items ?? [])
+      .slice()
+      .sort((a, b) => a.orden - b.orden)
+      .map(i => ({ id: i.id, tarea: i.tarea, obligatorio: i.obligatorio, orden: i.orden })),
+  };
+}
+
+function mapRegistro(r) {
+  return {
+    id: r.id,
+    maquinariaId: r.maquina_id,
+    checklistId: r.checklist_id,
+    fechaEjecucion: (r.fecha_ejecucion ?? '').split('T')[0],
+    usuario: r.usuario_nombre,
+    resultadoGeneral: r.resultado_general,
+    observaciones: r.observaciones ?? '',
+    firmaDigital: r.firma_digital ?? '',
+    items: (r.registro_items ?? [])
+      .slice()
+      .sort((a, b) => a.orden - b.orden)
+      .map(i => ({
+        id: i.checklist_item_id ?? i.id,
+        tarea: i.tarea,
+        obligatorio: i.obligatorio,
+        orden: i.orden,
+        resultado: i.resultado,
+      })),
+  };
+}
+
 const AppContext = createContext(null);
-
-const INITIAL_USERS = [
-  { id: 'U1', nombre: 'Admin Sistema', correo: 'admin@carvimsa.com', contrasena: 'admin123', rol: 'administrador', estado: true, fechaRegistro: '2024-01-01' },
-  { id: 'U2', nombre: 'Carlos Mendoza', correo: 'supervisor@carvimsa.com', contrasena: 'super123', rol: 'supervisor', estado: true, fechaRegistro: '2024-01-10' },
-  { id: 'U3', nombre: 'Luis Torres', correo: 'operario@carvimsa.com', contrasena: 'oper123', rol: 'operario', estado: true, fechaRegistro: '2024-01-15' },
-  { id: 'U4', nombre: 'Ana Quispe', correo: 'a.quispe@carvimsa.com', contrasena: 'oper456', rol: 'operario', estado: true, fechaRegistro: '2024-02-01' },
-];
-
-const INITIAL_CHECKLISTS = [
-  {
-    id: 'CHL-001', nombre: 'Mantenimiento Preventivo Corrugadora', tipoMaquina: 'Corrugadora', estado: true, fechaCreacion: '2024-03-01',
-    items: [
-      { id: 'I1', tarea: 'Verificar tensión de correa principal', obligatorio: true, orden: 1 },
-      { id: 'I2', tarea: 'Inspeccionar rodillos de presión', obligatorio: true, orden: 2 },
-      { id: 'I3', tarea: 'Lubricar cadenas de transmisión', obligatorio: true, orden: 3 },
-      { id: 'I4', tarea: 'Revisar sistema eléctrico', obligatorio: false, orden: 4 },
-      { id: 'I5', tarea: 'Limpiar filtros de aspiración', obligatorio: true, orden: 5 },
-    ],
-  },
-  {
-    id: 'CHL-002', nombre: 'Inspección Ranuradora', tipoMaquina: 'Ranuradora', estado: true, fechaCreacion: '2024-03-10',
-    items: [
-      { id: 'I1', tarea: 'Verificar cuchillas de ranura', obligatorio: true, orden: 1 },
-      { id: 'I2', tarea: 'Calibrar presión de corte', obligatorio: true, orden: 2 },
-      { id: 'I3', tarea: 'Revisar sistema de avance', obligatorio: true, orden: 3 },
-    ],
-  },
-  {
-    id: 'CHL-003', nombre: 'Revisión Paletizadora', tipoMaquina: 'Paletizadora', estado: true, fechaCreacion: '2024-04-01',
-    items: [
-      { id: 'I1', tarea: 'Inspeccionar brazo robótico', obligatorio: true, orden: 1 },
-      { id: 'I2', tarea: 'Verificar sensores de posición', obligatorio: true, orden: 2 },
-      { id: 'I3', tarea: 'Revisar sistema neumático', obligatorio: false, orden: 3 },
-    ],
-  },
-];
-
-const INITIAL_REGISTROS = [
-  { id: 'REG-001', maquinariaId: 'MAQ-001', checklistId: 'CHL-001', fechaEjecucion: '2026-06-15', usuario: 'Luis Torres', resultadoGeneral: 'Conforme', items: [], firmaDigital: 'LT-2026', observaciones: 'Todo en orden, lubricación al día.' },
-  { id: 'REG-002', maquinariaId: 'MAQ-004', checklistId: 'CHL-001', fechaEjecucion: '2026-06-14', usuario: 'Ana Quispe', resultadoGeneral: 'No Conforme', items: [], firmaDigital: 'AQ-2026', observaciones: 'Se detectó desgaste en correa secundaria.' },
-];
 
 export function AppProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
-  const [usuarios, setUsuarios] = useState(INITIAL_USERS);
+  const [usuarios, setUsuarios] = useState([]);
   const [maquinaria, setMaquinaria] = useState([]);
-  const [checklists, setChecklists] = useState(INITIAL_CHECKLISTS);
+  const [checklists, setChecklists] = useState([]);
   const [incidencias, setIncidencias] = useState([]);
-  const [registros, setRegistros] = useState(INITIAL_REGISTROS);
+  const [registros, setRegistros] = useState([]);
   const [alertas, setAlertas] = useState([]);
 
-  const login = (correo, contrasena) => {
-    const u = usuarios.find(x => x.correo === correo && x.contrasena === contrasena && x.estado);
-    if (u) { setUsuario(u); return true; }
-    return false;
-  };
-  const logout = () => setUsuario(null);
+  // ---------- Cargas desde la BD ----------
 
-  const agregarUsuario = (data) => {
-    const nuevo = { ...data, id: `U${Date.now()}`, estado: true, fechaRegistro: new Date().toISOString().split('T')[0] };
-    setUsuarios(prev => [...prev, nuevo]);
-  };
-  const editarUsuario = (id, data) => setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
-  const toggleUsuario = (id) => setUsuarios(prev => prev.map(u => u.id === id ? { ...u, estado: !u.estado } : u));
+  const cargarUsuarios = useCallback(async () => {
+    const { data, error } = await supabase.from('usuarios').select('*').order('fecha_registro');
+    if (error) { console.error('Error cargando usuarios:', error); return; }
+    setUsuarios(data.map(mapUsuario));
+  }, []);
 
   const cargarMaquinaria = useCallback(async () => {
     const { data, error } = await supabase.from('maquinas').select('*').order('fecha_creacion');
     if (error) { console.error('Error cargando maquinaria:', error); return; }
     setMaquinaria(data.map(mapMaquina));
+  }, []);
+
+  const cargarChecklists = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('checklists')
+      .select('*, checklist_items(*)')
+      .order('fecha_creacion');
+    if (error) { console.error('Error cargando checklists:', error); return; }
+    setChecklists(data.map(mapChecklist));
   }, []);
 
   const cargarIncidencias = useCallback(async () => {
@@ -127,6 +138,15 @@ export function AppProvider({ children }) {
       .order('fecha_registro', { ascending: false });
     if (error) { console.error('Error cargando incidencias:', error); return; }
     setIncidencias(data.map(mapIncidencia));
+  }, []);
+
+  const cargarRegistros = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('registros_checklist')
+      .select('*, registro_items(*)')
+      .order('fecha_ejecucion', { ascending: false });
+    if (error) { console.error('Error cargando registros:', error); return; }
+    setRegistros(data.map(mapRegistro));
   }, []);
 
   const cargarAlertas = useCallback(async () => {
@@ -141,21 +161,79 @@ export function AppProvider({ children }) {
   useEffect(() => {
     let activo = true;
     (async () => {
-      const [maq, inc, alt] = await Promise.all([
+      const [usr, maq, ckl, inc, reg, alt] = await Promise.all([
+        supabase.from('usuarios').select('*').order('fecha_registro'),
         supabase.from('maquinas').select('*').order('fecha_creacion'),
+        supabase.from('checklists').select('*, checklist_items(*)').order('fecha_creacion'),
         supabase.from('incidencias').select('*, maquina:maquinas(id, nombre)').order('fecha_registro', { ascending: false }),
+        supabase.from('registros_checklist').select('*, registro_items(*)').order('fecha_ejecucion', { ascending: false }),
         supabase.from('alertas').select('*').order('fecha_envio', { ascending: false }),
       ]);
       if (!activo) return;
+      if (usr.error) console.error('Error cargando usuarios:', usr.error);
+      else setUsuarios(usr.data.map(mapUsuario));
       if (maq.error) console.error('Error cargando maquinaria:', maq.error);
       else setMaquinaria(maq.data.map(mapMaquina));
+      if (ckl.error) console.error('Error cargando checklists:', ckl.error);
+      else setChecklists(ckl.data.map(mapChecklist));
       if (inc.error) console.error('Error cargando incidencias:', inc.error);
       else setIncidencias(inc.data.map(mapIncidencia));
+      if (reg.error) console.error('Error cargando registros:', reg.error);
+      else setRegistros(reg.data.map(mapRegistro));
       if (alt.error) console.error('Error cargando alertas:', alt.error);
       else setAlertas(alt.data.map(mapAlerta));
     })();
     return () => { activo = false; };
   }, []);
+
+  // ---------- Autenticación ----------
+
+  const login = async (correo, contrasena) => {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('correo', correo)
+      .eq('contrasena', contrasena)
+      .eq('estado', true)
+      .maybeSingle();
+    if (error) { console.error('Error en login:', error); return false; }
+    if (data) { setUsuario(mapUsuario(data)); return true; }
+    return false;
+  };
+  const logout = () => setUsuario(null);
+
+  // ---------- Usuarios ----------
+
+  const agregarUsuario = async (data) => {
+    const { error } = await supabase.from('usuarios').insert({
+      nombre: data.nombre,
+      correo: data.correo,
+      contrasena: data.contrasena,
+      rol: data.rol,
+    });
+    if (error) throw error;
+    await cargarUsuarios();
+  };
+
+  const editarUsuario = async (id, data) => {
+    const { error } = await supabase.from('usuarios').update({
+      nombre: data.nombre,
+      correo: data.correo,
+      rol: data.rol,
+    }).eq('id', id);
+    if (error) throw error;
+    await cargarUsuarios();
+  };
+
+  const toggleUsuario = async (id) => {
+    const u = usuarios.find(x => x.id === id);
+    if (!u) return;
+    const { error } = await supabase.from('usuarios').update({ estado: !u.estado }).eq('id', id);
+    if (error) { console.error('Error cambiando estado de usuario:', error); return; }
+    await cargarUsuarios();
+  };
+
+  // ---------- Maquinaria ----------
 
   const agregarMaquina = async (data) => {
     const codigo = await siguienteCodigo('maquina', 'M');
@@ -188,10 +266,26 @@ export function AppProvider({ children }) {
     await cargarMaquinaria();
   };
 
-  const agregarChecklist = (data) => {
-    const nuevo = { ...data, id: `CHL-${Date.now()}`, estado: true, fechaCreacion: new Date().toISOString().split('T')[0] };
-    setChecklists(prev => [...prev, nuevo]);
+  // ---------- Checklists ----------
+
+  const agregarChecklist = async (data) => {
+    const { data: ck, error } = await supabase.from('checklists').insert({
+      nombre: data.nombre,
+      tipo_maquina: data.tipoMaquina,
+    }).select('id').single();
+    if (error) throw error;
+    const rows = data.items.map((it, idx) => ({
+      checklist_id: ck.id,
+      tarea: it.tarea,
+      obligatorio: it.obligatorio,
+      orden: it.orden ?? idx + 1,
+    }));
+    const { error: errorItems } = await supabase.from('checklist_items').insert(rows);
+    if (errorItems) throw errorItems;
+    await cargarChecklists();
   };
+
+  // ---------- Incidencias ----------
 
   const agregarIncidencia = async (data) => {
     const codigo = await siguienteCodigo('incidencia', 'INC');
@@ -239,12 +333,36 @@ export function AppProvider({ children }) {
     await cargarIncidencias();
   };
 
-  const agregarRegistro = (data) => {
-    const nuevo = { ...data, id: `REG-${Date.now()}`, fechaEjecucion: new Date().toISOString().split('T')[0] };
-    setRegistros(prev => [...prev, nuevo]);
+  // ---------- Registros de checklist ----------
+
+  const agregarRegistro = async (data) => {
     const conforme = data.items.every(i => i.resultado !== 'no_cumple');
-    actualizarEstadoMaquina(data.maquinariaId, conforme ? 'Operativa' : 'En Mantenimiento');
+    const { data: reg, error } = await supabase.from('registros_checklist').insert({
+      maquina_id: data.maquinariaId,
+      checklist_id: data.checklistId,
+      usuario_nombre: data.usuario,
+      resultado_general: conforme ? 'Conforme' : 'No Conforme',
+      observaciones: data.observaciones || null,
+      firma_digital: data.firmaDigital || null,
+    }).select('id').single();
+    if (error) throw error;
+
+    const rows = data.items.map(i => ({
+      registro_id: reg.id,
+      checklist_item_id: i.id,
+      tarea: i.tarea,
+      obligatorio: i.obligatorio,
+      orden: i.orden,
+      resultado: i.resultado,
+    }));
+    const { error: errorItems } = await supabase.from('registro_items').insert(rows);
+    if (errorItems) console.error('Error guardando ítems del registro:', errorItems);
+
+    await actualizarEstadoMaquina(data.maquinariaId, conforme ? 'Operativa' : 'En Mantenimiento');
+    await cargarRegistros();
   };
+
+  // ---------- Alertas ----------
 
   const marcarAlertaLeida = async (id) => {
     const { error } = await supabase.from('alertas').update({ estado: 'LEIDA' }).eq('id', id);

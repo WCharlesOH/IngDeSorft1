@@ -14,7 +14,7 @@ export default function Login() {
     setError('');
     setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const ok = login(correo, contrasena);
+    const ok = await login(correo, contrasena);
     if (!ok) setError('Credenciales incorrectas. Por favor, intente de nuevo.');
     setLoading(false);
   };
