@@ -15,6 +15,7 @@ export default function IncidentReport() {
   const [foto, setFoto] = useState(null);
   const [errores, setErrores] = useState({});
   const [done, setDone] = useState(null);
+  const [enviando, setEnviando] = useState(false);
   const fileRef = useRef();
 
   const set = (k, v) => { setForm(p => ({ ...p, [k]: v })); setErrores(p => ({ ...p, [k]: '' })); };
@@ -40,12 +41,20 @@ export default function IncidentReport() {
     return err;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const err = validate();
     if (Object.keys(err).length > 0) { setErrores(err); return; }
-    const nueva = { ...form, maquinariaNombre: maquina.nombre, evidenciaUrl: foto.url, reportadoPor: usuario.nombre };
-    agregarIncidencia(nueva);
-    setDone(nueva);
+    const nueva = { ...form, maquinariaNombre: maquina.nombre, evidenciaFile: foto.file, reportadoPor: usuario.nombre };
+    setEnviando(true);
+    try {
+      await agregarIncidencia(nueva);   // solo mostramos éxito si la BD confirmó la escritura
+      setDone(nueva);
+    } catch (e) {
+      console.error('Error al reportar incidencia:', e);
+      setErrores(p => ({ ...p, submit: 'No se pudo guardar la incidencia en el servidor. Verifique su conexión e intente nuevamente.' }));
+    } finally {
+      setEnviando(false);
+    }
   };
 
   const reset = () => { setForm({ maquinariaId: '', categoria: '', descripcion: '', prioridad: '' }); setFoto(null); setErrores({}); setDone(null); };
@@ -164,14 +173,22 @@ export default function IncidentReport() {
                 {errores.foto && <div className="text-danger mt-1" style={{ fontSize: '0.8rem' }}>{errores.foto}</div>}
               </div>
 
-              {Object.keys(errores).length > 0 && !Object.values(errores).every(v => !v) && (
+              {Object.entries(errores).some(([k, v]) => k !== 'submit' && v) && (
                 <div className="alert alert-danger py-2">
                   <i className="bi bi-exclamation-circle me-1" /><small>Complete todos los campos obligatorios antes de enviar el reporte.</small>
                 </div>
               )}
 
-              <button className="btn btn-ff-primary w-100 py-2" onClick={handleSubmit}>
-                <i className="bi bi-send me-2" />Enviar Reporte de Incidencia
+              {errores.submit && (
+                <div className="alert alert-danger py-2">
+                  <i className="bi bi-x-circle me-1" /><small>{errores.submit}</small>
+                </div>
+              )}
+
+              <button className="btn btn-ff-primary w-100 py-2" onClick={handleSubmit} disabled={enviando}>
+                {enviando
+                  ? <><span className="spinner-border spinner-border-sm me-2" role="status" />Enviando...</>
+                  : <><i className="bi bi-send me-2" />Enviar Reporte de Incidencia</>}
               </button>
             </div>
           </div>

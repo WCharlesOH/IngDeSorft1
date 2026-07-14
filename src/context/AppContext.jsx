@@ -289,6 +289,25 @@ export function AppProvider({ children }) {
 
   const agregarIncidencia = async (data) => {
     const codigo = await siguienteCodigo('incidencia', 'INC');
+
+    // Subir la evidencia fotográfica a Supabase Storage y guardar su URL pública.
+    // Si el bucket 'evidencias' no está configurado, no bloqueamos el registro de
+    // la incidencia: se guarda sin evidencia y se deja constancia en consola.
+    let evidenciaUrl = data.evidenciaUrl ?? null;
+    if (data.evidenciaFile) {
+      const ext = (data.evidenciaFile.name.split('.').pop() || 'jpg').toLowerCase();
+      const ruta = `${codigo}-${Date.now()}.${ext}`;
+      const { error: errorSubida } = await supabase.storage
+        .from('evidencias')
+        .upload(ruta, data.evidenciaFile, { contentType: data.evidenciaFile.type, upsert: false });
+      if (errorSubida) {
+        console.warn('No se pudo subir la evidencia a Storage (¿existe el bucket "evidencias"?):', errorSubida.message);
+        evidenciaUrl = null;
+      } else {
+        evidenciaUrl = supabase.storage.from('evidencias').getPublicUrl(ruta).data.publicUrl;
+      }
+    }
+
     const { error } = await supabase.from('incidencias').insert({
       codigo,
       maquina_id: data.maquinariaId,
@@ -296,10 +315,16 @@ export function AppProvider({ children }) {
       descripcion: data.descripcion,
       prioridad: data.prioridad,
       reportado_por: data.reportadoPor ?? null,
-      evidencia_url: data.evidenciaUrl ?? null,
+      evidencia_url: evidenciaUrl,
     });
     if (error) throw error;
-    await cargarIncidencias();
+
+    // Coordinar el estado de la máquina con la incidencia: una falla crítica o
+    // alta deja la máquina fuera de servicio (simétrico a la resolución, que la
+    // devuelve a 'Operativa'). Las prioridades menores no cambian el estado.
+    if (data.maquinariaId && (data.prioridad === 'CRITICA' || data.prioridad === 'ALTA')) {
+      await actualizarEstadoMaquina(data.maquinariaId, 'Con Falla');
+    }
 
     const esAlertaCritica = data.prioridad === 'CRITICA';
     const { error: errorAlerta } = await supabase.from('alertas').insert({
@@ -309,7 +334,8 @@ export function AppProvider({ children }) {
       estado: 'ENVIADA',
     });
     if (errorAlerta) console.error('Error guardando alerta:', errorAlerta);
-    await cargarAlertas();
+
+    await Promise.all([cargarIncidencias(), cargarAlertas()]);
   };
 
   const actualizarIncidencia = async (id, data) => {
@@ -359,6 +385,22 @@ export function AppProvider({ children }) {
     if (errorItems) console.error('Error guardando ítems del registro:', errorItems);
 
     await actualizarEstadoMaquina(data.maquinariaId, conforme ? 'Operativa' : 'En Mantenimiento');
+
+    // Coordinar alerta con el resultado del checklist: si quedó No Conforme, la
+    // máquina pasa a mantenimiento y se emite una alerta PREVENTIVA para el panel.
+    if (!conforme) {
+      const maquina = maquinaria.find(m => m.id === data.maquinariaId);
+      const nombreMaquina = maquina?.nombre ?? '—';
+      const { error: errorAlerta } = await supabase.from('alertas').insert({
+        tipo: 'PREVENTIVA',
+        mensaje: `Mantenimiento requerido: ${nombreMaquina} — checklist con ítems no conformes`,
+        maquinaria: nombreMaquina,
+        estado: 'ENVIADA',
+      });
+      if (errorAlerta) console.error('Error guardando alerta preventiva:', errorAlerta);
+      await cargarAlertas();
+    }
+
     await cargarRegistros();
   };
 

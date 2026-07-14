@@ -48,7 +48,7 @@ create table if not exists incidencias (
 create table if not exists alertas (
   id          uuid primary key default gen_random_uuid(),
   maquina_id  uuid references maquinas(id) on delete set null,
-  tipo        text not null check (tipo in ('CRITICA', 'INFORMATIVA')),
+  tipo        text not null check (tipo in ('CRITICA', 'INFORMATIVA', 'PREVENTIVA')),
   mensaje     text not null,
   maquinaria  text not null, -- nombre desnormalizado, se mantiene para no romper AppContext.jsx
   fecha_envio timestamptz not null default now(),
@@ -157,3 +157,38 @@ grant select, insert, update, delete on
 to anon, authenticated;
 
 grant execute on function siguiente_valor(text) to anon, authenticated;
+
+-- ============================================================
+-- Migraciones idempotentes
+-- (Las tablas de arriba usan "create table if not exists", por lo que NO se
+--  alteran si ya existían. Este bloque sí actualiza una BD creada con una
+--  versión anterior del esquema. Es seguro re-ejecutarlo cuantas veces haga falta.)
+-- ============================================================
+
+-- Columna añadida después de la versión inicial de la tabla alertas.
+alter table alertas add column if not exists maquina_id uuid references maquinas(id) on delete set null;
+
+-- Permitir el tipo de alerta 'PREVENTIVA' (mantenimiento) además de las originales.
+alter table alertas drop constraint if exists alertas_tipo_check;
+alter table alertas add constraint alertas_tipo_check check (tipo in ('CRITICA', 'INFORMATIVA', 'PREVENTIVA'));
+
+-- ============================================================
+-- Storage: evidencias fotográficas de las incidencias (HU de reporte)
+-- El front sube la foto al bucket 'evidencias' y guarda su URL pública en
+-- incidencias.evidencia_url. Bucket público para lectura; escritura abierta
+-- (demo/académico, igual que las políticas RLS de arriba).
+-- ============================================================
+
+insert into storage.buckets (id, name, public)
+values ('evidencias', 'evidencias', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "evidencias_lectura_publica" on storage.objects;
+create policy "evidencias_lectura_publica"
+  on storage.objects for select
+  using (bucket_id = 'evidencias');
+
+drop policy if exists "evidencias_escritura_demo" on storage.objects;
+create policy "evidencias_escritura_demo"
+  on storage.objects for insert
+  with check (bucket_id = 'evidencias');

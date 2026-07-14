@@ -84,9 +84,14 @@ export default function IncidentList({ mostrarHistorial = false }) {
 
   const canManage = usuario?.rol === 'supervisor' || usuario?.rol === 'administrador';
 
-  const handleUpdate = (id, data) => {
-    actualizarIncidencia(id, data);
-    setToast('Incidencia actualizada correctamente.');
+  const handleUpdate = async (id, data) => {
+    try {
+      await actualizarIncidencia(id, data);
+      setToast('Incidencia actualizada correctamente.');
+    } catch (e) {
+      console.error('Error actualizando incidencia:', e);
+      setToast('No se pudo actualizar la incidencia. Intente nuevamente.');
+    }
     setTimeout(() => setToast(''), 3000);
   };
 
@@ -116,9 +121,9 @@ export default function IncidentList({ mostrarHistorial = false }) {
 
       {!mostrarHistorial && (
         <div className="row g-3 mb-4">
-          {[['bi-exclamation-circle', abiertas, 'Abiertas', '#ef4444'], ['bi-clock', enProceso, 'En Proceso', '#eab308'], ['bi-check-circle', resueltas, 'Resueltas', '#22c55e']].map(([icon, val, lbl, color]) => (
+          {[['bi-exclamation-circle', abiertas, 'Abiertas', '#ef4444', 'ABIERTA'], ['bi-clock', enProceso, 'En Proceso', '#eab308', 'EN_PROCESO'], ['bi-check-circle', resueltas, 'Resueltas', '#22c55e', 'RESUELTA']].map(([icon, val, lbl, color, estadoVal]) => (
             <div key={lbl} className="col-md-4">
-              <div className="ff-stat-card" style={{ cursor: 'pointer' }} onClick={() => setFiltroEstado(lbl === filtroEstado ? '' : lbl.toUpperCase().replace(' ', '_'))}>
+              <div className="ff-stat-card" style={{ cursor: 'pointer' }} onClick={() => setFiltroEstado(filtroEstado === estadoVal ? '' : estadoVal)}>
                 <div className="ff-stat-icon" style={{ background: color + '20', color }}><i className={`bi ${icon}`} /></div>
                 <div><div className="ff-stat-value">{val}</div><div className="ff-stat-label">Incidencias {lbl}</div></div>
               </div>
