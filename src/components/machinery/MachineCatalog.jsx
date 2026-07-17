@@ -246,6 +246,13 @@ export default function MachineCatalog({ rol, maquinaInicial, setVista }) {
                 <span><i className="bi bi-diagram-3 me-1" />{m.linea}</span>
                 <span><i className="bi bi-geo-alt me-1" />{m.ubicacion}</span>
               </div>
+              {canEdit && !m.ficha && (
+                <div className="mt-2">
+                  <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style={{ fontSize: '0.65rem' }}>
+                    <i className="bi bi-file-earmark-text me-1" />Ficha técnica pendiente
+                  </span>
+                </div>
+              )}
               {canEdit && (
                 <button className="btn btn-sm btn-outline-secondary mt-2 w-100" onClick={e => { e.stopPropagation(); setModal(m); }}>
                   <i className="bi bi-pencil me-1" />Editar

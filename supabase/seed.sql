@@ -94,6 +94,18 @@ select m.id, c.id, 'Ana Quispe', '2026-06-14', 'No Conforme', 'AQ-2026', 'Se det
 from maquinas m, checklists c
 where m.nombre = 'Corrugadora Secundaria B' and c.nombre = 'Mantenimiento Preventivo Corrugadora';
 
+-- Fichas técnicas (HU6): M1 y M2 llegan con ficha registrada; M3..M5 quedan
+-- pendientes para poder probar el flujo de "Completar Ficha Técnica".
+insert into fichas_tecnicas (maquina_id, marca, modelo, numero_serie, anio_fabricacion, potencia, voltaje, capacidad, dimensiones, peso, estado_inicial, observaciones)
+select id, 'BHS Corrugated', 'QF-2400', 'BHS-2019-08841', 2019, '110 kW', '440 V trifásico', '250 m/min', '12.5 × 3.2 × 2.8 m', '18 500 kg', 'Operativa', 'Instalada en 2020. Última actualización de rodillos en 2024.'
+from maquinas where nombre = 'Corrugadora Principal A'
+on conflict (maquina_id) do nothing;
+
+insert into fichas_tecnicas (maquina_id, marca, modelo, numero_serie, anio_fabricacion, potencia, voltaje, capacidad, dimensiones, peso, estado_inicial, observaciones)
+select id, 'Bobst', 'FFG 618', 'BST-2017-33210', 2017, '75 kW', '380 V trifásico', '18 000 cajas/h', '9.8 × 2.6 × 2.4 m', '12 300 kg', 'Operativa', 'Cuchillas de ranura con desgaste acelerado; revisión trimestral.'
+from maquinas where nombre = 'Ranuradora B-12'
+on conflict (maquina_id) do nothing;
+
 -- Contadores: los próximos generados por la app serán M6 / INC5
 insert into contadores (nombre, valor) values ('maquina', 5), ('incidencia', 4)
 on conflict (nombre) do update set valor = excluded.valor;

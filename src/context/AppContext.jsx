@@ -19,6 +19,28 @@ function mapUsuario(r) {
   };
 }
 
+function mapFicha(r) {
+  // La relación es 1 a 1 (unique en maquina_id), pero según la versión de
+  // PostgREST el embed puede llegar como objeto o como arreglo de un elemento.
+  const f = Array.isArray(r) ? r[0] : r;
+  if (!f) return null;
+  return {
+    id: f.id,
+    marca: f.marca,
+    modelo: f.modelo,
+    numeroSerie: f.numero_serie,
+    anioFabricacion: f.anio_fabricacion,
+    potencia: f.potencia ?? '',
+    voltaje: f.voltaje ?? '',
+    capacidad: f.capacidad ?? '',
+    dimensiones: f.dimensiones ?? '',
+    peso: f.peso ?? '',
+    estadoInicial: f.estado_inicial,
+    observaciones: f.observaciones ?? '',
+    fechaRegistro: (f.fecha_registro ?? '').split('T')[0],
+  };
+}
+
 function mapMaquina(r) {
   return {
     id: r.id,
@@ -29,6 +51,7 @@ function mapMaquina(r) {
     estado: r.estado,
     ubicacion: r.ubicacion,
     fechaCreacion: r.fecha_creacion,
+    ficha: mapFicha(r.ficha),
   };
 }
 
@@ -117,7 +140,12 @@ export function AppProvider({ children }) {
   }, []);
 
   const cargarMaquinaria = useCallback(async () => {
-    const { data, error } = await supabase.from('maquinas').select('*').order('fecha_creacion');
+    let { data, error } = await supabase.from('maquinas').select('*, ficha:fichas_tecnicas(*)').order('fecha_creacion');
+    if (error) {
+      // BD sin migrar (tabla fichas_tecnicas inexistente): degradar a la consulta simple.
+      console.warn('No se pudo cargar la ficha técnica (¿falta ejecutar schema.sql?):', error.message);
+      ({ data, error } = await supabase.from('maquinas').select('*').order('fecha_creacion'));
+    }
     if (error) { console.error('Error cargando maquinaria:', error); return; }
     setMaquinaria(data.map(mapMaquina));
   }, []);
@@ -163,7 +191,7 @@ export function AppProvider({ children }) {
     (async () => {
       const [usr, maq, ckl, inc, reg, alt] = await Promise.all([
         supabase.from('usuarios').select('*').order('fecha_registro'),
-        supabase.from('maquinas').select('*').order('fecha_creacion'),
+        supabase.from('maquinas').select('*, ficha:fichas_tecnicas(*)').order('fecha_creacion'),
         supabase.from('checklists').select('*, checklist_items(*)').order('fecha_creacion'),
         supabase.from('incidencias').select('*, maquina:maquinas(id, nombre)').order('fecha_registro', { ascending: false }),
         supabase.from('registros_checklist').select('*, registro_items(*)').order('fecha_ejecucion', { ascending: false }),
@@ -172,7 +200,13 @@ export function AppProvider({ children }) {
       if (!activo) return;
       if (usr.error) console.error('Error cargando usuarios:', usr.error);
       else setUsuarios(usr.data.map(mapUsuario));
-      if (maq.error) console.error('Error cargando maquinaria:', maq.error);
+      if (maq.error) {
+        // BD sin migrar (tabla fichas_tecnicas inexistente): degradar a la consulta simple.
+        console.warn('No se pudo cargar la ficha técnica (¿falta ejecutar schema.sql?):', maq.error.message);
+        const maqSimple = await supabase.from('maquinas').select('*').order('fecha_creacion');
+        if (maqSimple.error) console.error('Error cargando maquinaria:', maqSimple.error);
+        else if (activo) setMaquinaria(maqSimple.data.map(mapMaquina));
+      }
       else setMaquinaria(maq.data.map(mapMaquina));
       if (ckl.error) console.error('Error cargando checklists:', ckl.error);
       else setChecklists(ckl.data.map(mapChecklist));
@@ -264,6 +298,36 @@ export function AppProvider({ children }) {
     const { error } = await supabase.from('maquinas').update({ estado }).eq('id', id);
     if (error) throw error;
     await cargarMaquinaria();
+  };
+
+  // HU6: registra o actualiza la ficha técnica asociada a una máquina.
+  const guardarFichaTecnica = async (maquinaId, data) => {
+    const maquina = maquinaria.find(m => m.id === maquinaId);
+    const esNueva = !maquina?.ficha;
+    const { error } = await supabase.from('fichas_tecnicas').upsert({
+      maquina_id: maquinaId,
+      marca: data.marca,
+      modelo: data.modelo,
+      numero_serie: data.numeroSerie,
+      anio_fabricacion: data.anioFabricacion ? Number(data.anioFabricacion) : null,
+      potencia: data.potencia || null,
+      voltaje: data.voltaje || null,
+      capacidad: data.capacidad || null,
+      dimensiones: data.dimensiones || null,
+      peso: data.peso || null,
+      estado_inicial: data.estadoInicial,
+      observaciones: data.observaciones || null,
+      fecha_actualizacion: new Date().toISOString(),
+    }, { onConflict: 'maquina_id' });
+    if (error) throw error;
+    // Al registrar la ficha por primera vez, el estado inicial declarado se
+    // aplica como estado operativo de la máquina (ediciones posteriores solo
+    // actualizan el dato histórico de la ficha).
+    if (esNueva && data.estadoInicial && data.estadoInicial !== maquina?.estado) {
+      await actualizarEstadoMaquina(maquinaId, data.estadoInicial);
+    } else {
+      await cargarMaquinaria();
+    }
   };
 
   // ---------- Checklists ----------
@@ -418,7 +482,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       usuario, login, logout,
       usuarios, agregarUsuario, editarUsuario, toggleUsuario,
-      maquinaria, agregarMaquina, editarMaquina, actualizarEstadoMaquina,
+      maquinaria, agregarMaquina, editarMaquina, actualizarEstadoMaquina, guardarFichaTecnica,
       checklists, agregarChecklist,
       incidencias, agregarIncidencia, actualizarIncidencia,
       registros, agregarRegistro,

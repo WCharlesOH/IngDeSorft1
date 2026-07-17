@@ -192,3 +192,34 @@ drop policy if exists "evidencias_escritura_demo" on storage.objects;
 create policy "evidencias_escritura_demo"
   on storage.objects for insert
   with check (bucket_id = 'evidencias');
+
+-- ============================================================
+-- HU6: Ficha técnica de la máquina (especificaciones y estado inicial)
+-- Relación 1 a 1 con maquinas (unique en maquina_id). Bloque idempotente:
+-- es seguro re-ejecutarlo sobre una BD existente.
+-- ============================================================
+
+create table if not exists fichas_tecnicas (
+  id                  uuid primary key default gen_random_uuid(),
+  maquina_id          uuid not null unique references maquinas(id) on delete cascade,
+  marca               text not null,
+  modelo              text not null,
+  numero_serie        text not null,
+  anio_fabricacion    int,
+  potencia            text,
+  voltaje             text,
+  capacidad           text,
+  dimensiones         text,
+  peso                text,
+  estado_inicial      text not null default 'Operativa' check (estado_inicial in ('Operativa', 'En Mantenimiento', 'Con Falla')),
+  observaciones       text,
+  fecha_registro      timestamptz not null default now(),
+  fecha_actualizacion timestamptz not null default now()
+);
+
+alter table fichas_tecnicas enable row level security;
+
+drop policy if exists "demo_all_fichas_tecnicas" on fichas_tecnicas;
+create policy "demo_all_fichas_tecnicas" on fichas_tecnicas for all using (true) with check (true);
+
+grant select, insert, update, delete on fichas_tecnicas to anon, authenticated;
